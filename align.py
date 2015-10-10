@@ -2,6 +2,7 @@ import sys
 import itertools 
 sofar=[]
 
+
 def trace_back_local(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
     #append to aligned sequences!
     m_index=nextkey[0]
@@ -156,9 +157,9 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
     for x in range(1,nA+1):
         for y in range(1,nB+1): 
             Sx=match_matrix[tuple([seqA[x-1],seqB[y-1]])]
-            M_match=round(M[x-1][y-1]+Sx,1)
-            M_gapy=round(Ix[x-1][y-1]+Sx,1)
-            M_gapx=round(Iy[x-1][y-1]+Sx,1)
+            M_match=round(M[x-1][y-1]+Sx,10)
+            M_gapy=round(Ix[x-1][y-1]+Sx,10)
+            M_gapx=round(Iy[x-1][y-1]+Sx,10)
             options=[M_match,M_gapy,M_gapx,0]
             score=max(options)
             M[x][y]=score
@@ -184,8 +185,8 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                 else:
                     pointers[slot]=[keyval]
 
-            Ix_open_gap=round(M[x-1][y]-dy,1)
-            Ix_extend_gap=round(Ix[x-1][y]-ey,1)
+            Ix_open_gap=round(M[x-1][y]-dy,10)
+            Ix_extend_gap=round(Ix[x-1][y]-ey,10)
             options_Ix=[Ix_open_gap,Ix_extend_gap]
             score=max(options_Ix) 
             Ix[x][y]=score 
@@ -204,8 +205,8 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot]=[keyval]
 
 
-            Iy_open_gap=round(M[x][y-1]-dx,1)
-            Iy_extend_gap=round(Iy[x][y-1]-ex,1)
+            Iy_open_gap=round(M[x][y-1]-dx,10)
+            Iy_extend_gap=round(Iy[x][y-1]-ex,10)
             Iy_options=[Iy_open_gap,Iy_extend_gap]
             score=max(Iy_options) 
             Iy[x][y]=score 
@@ -239,8 +240,8 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
     if max_score <=0:
         return None #no alignment can be generated!
     outf.write(str(round(max_score,1)))
-    for p in pointers:
-        print str(p)+":"+str(pointers[p])
+    #for p in pointers:
+    #    print str(p)+":"+str(pointers[p])
     for i in range(len(max_xy)): 
         trace_back_local("","",pointers,tuple(['M',max_xy[i][0],max_xy[i][1],max_score]),'_'+seqA,'_'+seqB,outf)
     return None 
@@ -282,9 +283,9 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
         for y in range(1,nB+1):
             
             Sx=match_matrix[tuple([seqA[x-1],seqB[y-1]])]
-            M_match=round(M[x-1][y-1]+Sx,1) 
-            M_gapy=round(Ix[x-1][y-1]+Sx,1)
-            M_gapx=round(Iy[x-1][y-1]+Sx,1) 
+            M_match=round(M[x-1][y-1]+Sx,10) 
+            M_gapy=round(Ix[x-1][y-1]+Sx,10)
+            M_gapx=round(Iy[x-1][y-1]+Sx,10) 
             options=[M_match,M_gapy,M_gapx]
             score=max(options) 
             M[x][y]=score 
@@ -311,8 +312,8 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
 
             
 
-            Ix_open_gap=round(M[x-1][y]-dy,1)
-            Ix_extend_gap=round(Ix[x-1][y]-ey,1)
+            Ix_open_gap=round(M[x-1][y]-dy,10)
+            Ix_extend_gap=round(Ix[x-1][y]-ey,10)
             options_Ix=[Ix_open_gap,Ix_extend_gap]
             score=max(options_Ix) 
             Ix[x][y]=score 
@@ -331,8 +332,8 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot]=[keyval]
 
                     
-            Iy_open_gap=round(M[x][y-1]-dx,1)
-            Iy_extend_gap=round(Iy[x][y-1]-ex,1)
+            Iy_open_gap=round(M[x][y-1]-dx,10)
+            Iy_extend_gap=round(Iy[x][y-1]-ex,10)
             Iy_options=[Iy_open_gap,Iy_extend_gap]
             score=max(Iy_options) 
             Iy[x][y]=score 
@@ -349,9 +350,9 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot].append(keyval)
                 else:
                     pointers[slot]=[keyval]
-    print "M:"+str(M)
-    print "Ix:"+str(Ix)
-    print "Iy:"+str(Iy) 
+    #print "M:"+str(M)
+    #print "Ix:"+str(Ix)
+    #print "Iy:"+str(Iy) 
     #DO THE TRACEBACK THROUGH THE POINTER MATRIX!
     max_xy=[] 
     max_score=float("-inf")  #all scores in M should be > 0, so we initialized max_score at -1
@@ -374,6 +375,7 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                 max_xy.append(tuple(['M',nA,y,max_score]))
 
     startpos=max_xy
+    print str(max_score) 
     outf.write(str(round(max_score,1)))
     
     alignments=[]
@@ -406,10 +408,10 @@ def parse_args(data):
     seqB=data[1]
     local=int(data[2])
     penalties=data[3].split(' ')
-    dx=float(penalties[2]) #gap open penalty for A 
-    ex=float(penalties[3]) #gap extension penalty for A 
-    dy=float(penalties[0]) #gap open penalty for B
-    ey=float(penalties[1]) #gap extension penalty for B
+    dx=float(penalties[0]) #gap open penalty for A 
+    ex=float(penalties[1]) #gap extension penalty for A 
+    dy=float(penalties[2]) #gap open penalty for B
+    ey=float(penalties[3]) #gap extension penalty for B
     n_alphabet_A=int(data[4])
     alphabet_A=data[5] 
     n_alphabet_B=int(data[6]) 
