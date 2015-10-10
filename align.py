@@ -2,6 +2,69 @@ import sys
 import itertools 
 sofar=[]
 
+def trace_back_local(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
+    #append to aligned sequences!
+    m_index=nextkey[0]
+    x_index=nextkey[1]
+    y_index=nextkey[2]
+    scoreval=nextkey[3]
+    print "nextkey:"+str(nextkey) 
+    if (scoreval==0) and (m_index=="M"):
+        dontadd=True
+    else: 
+        if m_index=="M":
+            alignedA=alignedA+seqA[x_index]
+            alignedB=alignedB+seqB[y_index]
+        elif m_index=="Ix":
+            alignedA=alignedA+seqA[x_index]
+            alignedB=alignedB+'_'
+        elif m_index=="Iy":
+            alignedA=alignedA+'_'
+            alignedB=alignedB+seqB[y_index]
+    #nextkey=nextkey[0:3] 
+    if (nextkey not in pointer_dict) or ((scoreval==0) and (m_index=="M")):
+        print "STOP!" 
+        #we're done, break out of the recursion!
+        #Trim off the end gaps from sequences and score list
+       
+        strip_front=0
+        strip_rear=0 
+        for i in range(len(alignedA)):
+            if alignedA[i]=="_":
+                strip_front+=1
+            elif alignedB[i]=="_":
+                strip_front+=1
+            else:
+                #no more gaps, stop!
+                break
+        #reverse and check for leading gaps from the other direction        
+        alignedA=alignedA[::-1]
+        alignedB=alignedB[::-1]
+        for i in range(len(alignedA)):
+            if alignedA[i]=="_":
+                strip_rear+=1
+            elif alignedB[i]=="_":
+                strip_rear+=1
+            else:
+                #no more gaps, stop!
+                break
+        start_index=strip_rear
+        end_index=len(alignedA)-strip_front
+        alignedA=alignedA[start_index:end_index]
+        alignedB=alignedB[start_index:end_index]
+        result=tuple([alignedA,alignedB])
+        if result not in sofar: 
+            outf.write('\n\n'+alignedA+'\n'+alignedB)
+            sofar.append(result) 
+        return None 
+    else:
+        #add to the alignd sequences
+        steps=pointer_dict[nextkey]
+        print "steps:"+str(steps) 
+        for s in steps: 
+            trace_back_local(alignedA,alignedB,pointer_dict,s,seqA,seqB,outf)
+
+
 def trace_back(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
     #append to aligned sequences!
     m_index=nextkey[0]
@@ -93,68 +156,68 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
     for x in range(1,nA+1):
         for y in range(1,nB+1): 
             Sx=match_matrix[tuple([seqA[x-1],seqB[y-1]])]
-            M_match=M[x-1][y-1]+Sx
-            M_gapy=Ix[x-1][y-1]+Sx
-            M_gapx=Iy[x-1][y-1]+Sx
+            M_match=round(M[x-1][y-1]+Sx,1)
+            M_gapy=round(Ix[x-1][y-1]+Sx,1)
+            M_gapx=round(Iy[x-1][y-1]+Sx,1)
             options=[M_match,M_gapy,M_gapx,0]
             score=max(options)
             M[x][y]=score
-            slot=tuple(['M',x,y])
-            if score >0:                
-                if M[x][y]==M_match:
-                    keyval=tuple(['M',x-1,y-1,score])
-                    if slot in pointers:
-                        pointers[slot].append(keyval) 
-                    else:
-                        pointers[slot]=[keyval]
-                if M[x][y]==M_gapy:
-                    keyval=tuple(['Ix',x-1,y-1,score])
-                    if slot in pointers:
-                        pointers[slot].append(keyval)
-                    else:
-                        pointers[slot]=[keyval]
+            slot=tuple(['M',x,y,score])
+            
+            if M[x][y]==M_match:
+                keyval=tuple(['M',x-1,y-1,M[x-1][y-1]])
+                if slot in pointers:
+                    pointers[slot].append(keyval) 
+                else:
+                    pointers[slot]=[keyval]
+            if M[x][y]==M_gapy:
+                keyval=tuple(['Ix',x-1,y-1,Ix[x-1][y-1]])
+                if slot in pointers:
+                    pointers[slot].append(keyval)
+                else:
+                    pointers[slot]=[keyval]
 
-                if M[x][y]==M_gapx:
-                    keyval=tuple(['Iy',x-1,y-1,score])
-                    if slot in pointers:
-                        pointers[slot].append(keyval)
-                    else:
-                        pointers[slot]=[keyval]
-            #if value is 0, we stop the traceback! 
-            Ix_open_gap=M[x-1][y]-dy
-            Ix_extend_gap=Ix[x-1][y]-ey
+            if M[x][y]==M_gapx:
+                keyval=tuple(['Iy',x-1,y-1,Iy[x-1][y-1]])
+                if slot in pointers:
+                    pointers[slot].append(keyval)
+                else:
+                    pointers[slot]=[keyval]
+
+            Ix_open_gap=round(M[x-1][y]-dy,1)
+            Ix_extend_gap=round(Ix[x-1][y]-ey,1)
             options_Ix=[Ix_open_gap,Ix_extend_gap]
             score=max(options_Ix) 
             Ix[x][y]=score 
-            slot=tuple(['Ix',x,y])
+            slot=tuple(['Ix',x,y,score])
             if Ix[x][y]==Ix_open_gap:
-                keyval=tuple(['M',x-1,y,score])
+                keyval=tuple(['M',x-1,y,M[x-1][y]])
                 if slot in pointers:
                     pointers[slot].append(keyval) 
                 else:
                     pointers[slot]=[keyval]
             if Ix[x][y]==Ix_extend_gap:
-                keyval=tuple(['Ix',x-1,y,score])
+                keyval=tuple(['Ix',x-1,y,Ix[x-1][y]])
                 if slot in pointers:
                     pointers[slot].append(keyval)
                 else:
                     pointers[slot]=[keyval]
 
 
-            Iy_open_gap=M[x][y-1]-dx
-            Iy_extend_gap=Iy[x][y-1]-ex
+            Iy_open_gap=round(M[x][y-1]-dx,1)
+            Iy_extend_gap=round(Iy[x][y-1]-ex,1)
             Iy_options=[Iy_open_gap,Iy_extend_gap]
             score=max(Iy_options) 
             Iy[x][y]=score 
-            slot=tuple(['Iy',x,y])
+            slot=tuple(['Iy',x,y,score])
             if Iy[x][y]==Iy_open_gap:
-                keyval=tuple(['M',x,y-1,score])
+                keyval=tuple(['M',x,y-1,M[x][y-1]])
                 if slot in pointers:
                     pointers[slot].append(keyval)
                 else:
                     pointers[slot]=[keyval]
             if Iy[x][y]==Iy_extend_gap:
-                keyval=tuple(['Iy',x,y-1,score])
+                keyval=tuple(['Iy',x,y-1,Iy[x][y-1]])
                 if slot in pointers:
                     pointers[slot].append(keyval)
                 else:
@@ -176,8 +239,10 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
     if max_score <=0:
         return None #no alignment can be generated!
     outf.write(str(round(max_score,1)))
+    for p in pointers:
+        print str(p)+":"+str(pointers[p])
     for i in range(len(max_xy)): 
-        trace_back("","",pointers,tuple(['M',max_xy[i][0],max_xy[i][1],max_score]),'_'+seqA,'_'+seqB,outf)
+        trace_back_local("","",pointers,tuple(['M',max_xy[i][0],max_xy[i][1],max_score]),'_'+seqA,'_'+seqB,outf)
     return None 
 
 #Global Needleman-Wunsch Alignment 
@@ -206,24 +271,6 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
             
     #TAKE CARE OF BOUNDARY CONDITIONS
     #Initialize all as -Inf
-    '''
-    for x in range(nA+1):
-        M[x][0]=float("-inf")
-        Ix[x][0]=float("-inf")
-        Iy[x][0]=float("-inf")
-
-    for y in range(nB+1):
-        M[0][y]=float("-inf")
-        Ix[0][y]=float("-inf")
-        Iy[0][y]=float("-inf")
-    
-    for x in range(1,nA+1):
-        Ix[x][0]=-1*dy-(x-1)*ey
-    for y in range(1,nB+1):
-        Iy[0][y]=-1*dx-(y-1)*ex
-        
-    M[0][0]=0
-    '''
     for x in range(nA+1):
         for y in range(nB+1):
             M[x][y]=0
@@ -235,9 +282,9 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
         for y in range(1,nB+1):
             
             Sx=match_matrix[tuple([seqA[x-1],seqB[y-1]])]
-            M_match=M[x-1][y-1]+Sx
-            M_gapy=Ix[x-1][y-1]+Sx
-            M_gapx=Iy[x-1][y-1]+Sx
+            M_match=round(M[x-1][y-1]+Sx,1) 
+            M_gapy=round(Ix[x-1][y-1]+Sx,1)
+            M_gapx=round(Iy[x-1][y-1]+Sx,1) 
             options=[M_match,M_gapy,M_gapx]
             score=max(options) 
             M[x][y]=score 
@@ -264,8 +311,8 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
 
             
 
-            Ix_open_gap=M[x-1][y]-dy
-            Ix_extend_gap=Ix[x-1][y]-ey
+            Ix_open_gap=round(M[x-1][y]-dy,1)
+            Ix_extend_gap=round(Ix[x-1][y]-ey,1)
             options_Ix=[Ix_open_gap,Ix_extend_gap]
             score=max(options_Ix) 
             Ix[x][y]=score 
@@ -284,8 +331,8 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot]=[keyval]
 
                     
-            Iy_open_gap=M[x][y-1]-dx
-            Iy_extend_gap=Iy[x][y-1]-ex
+            Iy_open_gap=round(M[x][y-1]-dx,1)
+            Iy_extend_gap=round(Iy[x][y-1]-ex,1)
             Iy_options=[Iy_open_gap,Iy_extend_gap]
             score=max(Iy_options) 
             Iy[x][y]=score 
@@ -302,7 +349,6 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot].append(keyval)
                 else:
                     pointers[slot]=[keyval]
-            
     print "M:"+str(M)
     print "Ix:"+str(Ix)
     print "Iy:"+str(Iy) 
@@ -328,16 +374,6 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                 max_xy.append(tuple(['M',nA,y,max_score]))
 
     startpos=max_xy
-    '''
-    max_endscore=max([M[nA][nB],Ix[nA][nB],Ix[nA][nB]])
-    max_endscore=max_xy
-    if max_endscore==M[nA][nB]:
-        startpos.append(tuple(['M',nA,nB,max_endscore]))
-    if max_endscore==Ix[nA][nB]:
-        startpos.append(tuple(['Ix',nA,nB,max_endscore]))
-    if max_endscore==Iy[nA][nB]:
-        startpos.append(tuple(['Iy',nA,nB,max_endscore]))
-    '''
     outf.write(str(round(max_score,1)))
     
     alignments=[]
