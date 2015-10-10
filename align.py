@@ -1,5 +1,6 @@
 import sys 
 import itertools 
+sofar=[]
 
 def trace_back(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
     #append to aligned sequences!
@@ -46,9 +47,11 @@ def trace_back(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
         end_index=len(alignedA)-strip_front
         alignedA=alignedA[start_index:end_index]
         alignedB=alignedB[start_index:end_index]
-        outf.write('\n\n'+alignedA+'\n'+alignedB)
-        return None #collapse the recursion! 
-    
+        result=tuple([alignedA,alignedB])
+        if result not in sofar: 
+            outf.write('\n\n'+alignedA+'\n'+alignedB)
+            sofar.append(result) 
+        return None 
     else:
         #add to the alignd sequences
         steps=pointer_dict[nextkey]
@@ -81,18 +84,10 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
             
     #TAKE CARE OF BOUNDARY CONDITIONS
     for x in range(nA+1):
-        Ix[x][0]=float("-inf")
-        Iy[x][0]=float("-inf")
-
-    for y in range(nB+1):
-        Ix[0][y]=float("-inf")
-        Iy[0][y]=float("-inf")
-    
-    for x in range(nA+1):
-        M[x][0]=0
-    for y in range(nB+1):
-        M[0][y]=0
-        
+        for y in range(nB+1):
+            M[x][y]=0
+            Ix[x][y]=0
+            Iy[x][y]=0
     pointers=dict()
     
     for x in range(1,nA+1):
@@ -102,10 +97,10 @@ def align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
             M_gapy=Ix[x-1][y-1]+Sx
             M_gapx=Iy[x-1][y-1]+Sx
             options=[M_match,M_gapy,M_gapx,0]
-            score=max(options) 
+            score=max(options)
             M[x][y]=score
-            if score >0: 
-                slot=tuple(['M',x,y])
+            slot=tuple(['M',x,y])
+            if score >0:                
                 if M[x][y]==M_match:
                     keyval=tuple(['M',x-1,y-1,score])
                     if slot in pointers:
@@ -211,6 +206,7 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
             
     #TAKE CARE OF BOUNDARY CONDITIONS
     #Initialize all as -Inf
+    '''
     for x in range(nA+1):
         M[x][0]=float("-inf")
         Ix[x][0]=float("-inf")
@@ -222,12 +218,17 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
         Iy[0][y]=float("-inf")
     
     for x in range(1,nA+1):
-        Ix[x][0]=-dy-(x-1)*ey
+        Ix[x][0]=-1*dy-(x-1)*ey
     for y in range(1,nB+1):
-        Iy[0][y]=-dx-(y-1)*ex
+        Iy[0][y]=-1*dx-(y-1)*ex
         
     M[0][0]=0
-    
+    '''
+    for x in range(nA+1):
+        for y in range(nB+1):
+            M[x][y]=0
+            Ix[x][y]=0
+            Iy[x][y]=0 
     #RECURSIVELY FILL IN THE REMAINING POSITIONS
     pointers=dict() 
     for x in range(1,nA+1):
@@ -302,16 +303,43 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                 else:
                     pointers[slot]=[keyval]
             
-            
+    print "M:"+str(M)
+    print "Ix:"+str(Ix)
+    print "Iy:"+str(Iy) 
     #DO THE TRACEBACK THROUGH THE POINTER MATRIX!
+    max_xy=[] 
+    max_score=float("-inf")  #all scores in M should be > 0, so we initialized max_score at -1
+    #Check last row of M 
+    for x in range(nA+1):
+        if M[x][nB]> max_score:
+            max_score=M[x][nB]
+            max_xy=[tuple(['M',x,nB,max_score])]
+        elif M[x][nB]==max_score:
+            if tuple(['M',x,nB,max_score]) not in max_xy:
+                max_xy.append(tuple(['M',x,nB,max_score]))
+
+    #Check last column of M                
+    for y in range(nB+1):
+        if M[nA][y] > max_score:
+            max_score=M[nA][y]
+            max_xy=[tuple(['M',nA,y,max_score])]
+        elif M[nA][y]==max_score:
+            if tuple(['M',nA,y,max_score]) not in max_xy:
+                max_xy.append(tuple(['M',nA,y,max_score]))
+
+    startpos=max_xy
+    '''
     max_endscore=max([M[nA][nB],Ix[nA][nB],Ix[nA][nB]])
+    max_endscore=max_xy
     if max_endscore==M[nA][nB]:
         startpos.append(tuple(['M',nA,nB,max_endscore]))
     if max_endscore==Ix[nA][nB]:
         startpos.append(tuple(['Ix',nA,nB,max_endscore]))
     if max_endscore==Iy[nA][nB]:
         startpos.append(tuple(['Iy',nA,nB,max_endscore]))
-    outf.write(str(round(max_endscore,1)))
+    '''
+    outf.write(str(round(max_score,1)))
+    
     alignments=[]
     for sp in startpos:
         #empty alignment and score list 
@@ -328,7 +356,7 @@ def build_match_matrix(pairs):
         tokens=line.split(' ')
         token1=tokens[2]
         token2=tokens[3]
-        score=int(tokens[4])
+        score=float(tokens[4])
         match_matrix[tuple([token1,token2])]=score
         #same score for reverse? Not true, may be a non-symmetric score matrix !
         #match_matrix[tuple([token2,token1])]=score
@@ -342,10 +370,10 @@ def parse_args(data):
     seqB=data[1]
     local=int(data[2])
     penalties=data[3].split(' ')
-    dx=int(penalties[0]) #gap open penalty for A 
-    ex=int(penalties[1]) #gap extension penalty for A 
-    dy=int(penalties[2]) #gap open penalty for B
-    ey=int(penalties[3]) #gap extension penalty for B
+    dx=float(penalties[2]) #gap open penalty for A 
+    ex=float(penalties[3]) #gap extension penalty for A 
+    dy=float(penalties[0]) #gap open penalty for B
+    ey=float(penalties[1]) #gap extension penalty for B
     n_alphabet_A=int(data[4])
     alphabet_A=data[5] 
     n_alphabet_B=int(data[6]) 
@@ -362,8 +390,7 @@ def main():
         data.remove('')
     #EXTRACT INPUTS 
     [seqA,seqB,local,penalties,dx,ex,dy,ey,n_alphabet_A,n_alphabet_B,alphabet_A,alphabet_B,match_matrix]=parse_args(data)
-
-    if local==False:
+    if local==0:
         align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf)
     else:
         align_local(seqA,seqB,dx,ex,dy,ey,match_matrix,outf)
