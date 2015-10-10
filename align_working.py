@@ -9,7 +9,9 @@ def trace_back_local(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
     x_index=nextkey[1]
     y_index=nextkey[2]
     scoreval=nextkey[3]
-    if (scoreval >0) or (m_index!="M"): 
+    if (scoreval==0) and (m_index=="M"):
+        dontadd=True
+    else: 
         if m_index=="M":
             alignedA=alignedA+seqA[x_index]
             alignedB=alignedB+seqB[y_index]
@@ -79,10 +81,7 @@ def trace_back(alignedA,alignedB,pointer_dict,nextkey,seqA,seqB,outf):
     if nextkey not in pointer_dict:
         #we're done, break out of the recursion!
         #Trim off the end gaps from sequences and score list
-        print "______________________________________________________"
-        print alignedA
-        print alignedB
-        print "______________________________________________________" 
+       
         strip_front=0
         strip_rear=0 
         for i in range(len(alignedA)):
@@ -345,6 +344,14 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
                     pointers[slot].append(keyval)
                 else:
                     pointers[slot]=[keyval]
+    ###OUTPUT TEXT FOR QUIZ#####
+    print "M:"+str(M)
+    print "Ix:"+str(Ix)
+    print "Iy:"+str(Iy)
+    for p in pointers:
+        print str(p)+"-->"+str(pointers[p])
+
+    
     #DO THE TRACEBACK THROUGH THE POINTER MATRIX!
     max_xy=[] 
     max_score=float("-inf")  #all scores in M should be > 0, so we initialized max_score at -1
@@ -382,11 +389,9 @@ def align_global(seqA,seqB,dx,ex,dy,ey,match_matrix,outf):
 def build_match_matrix(pairs):
     match_matrix=dict()
     for line in pairs:
-#        print str(line) 
         tokens=line.split(' ')
         while '' in tokens:
             tokens.remove('') 
-#        print str(tokens)
         token1=tokens[2]
         token2=tokens[3]
         score=float(tokens[4])
@@ -403,9 +408,6 @@ def parse_args(data):
     seqB=data[1]
     local=int(data[2])
     penalties=data[3].split(' ')
-    while '' in penalties:
-        penalties.remove('')
-    
     dx=float(penalties[0]) #gap open penalty for A 
     ex=float(penalties[1]) #gap extension penalty for A 
     dy=float(penalties[2]) #gap open penalty for B
