@@ -1,0 +1,228 @@
+import sys
+import math 
+#parses inputs to the program 
+def parse_inputs():
+    iF_index=sys.argv.index('--iF')
+    iF=sys.argv[iF_index+1] 
+    kB=40000.0
+    if '--kB' in sys.argv:
+        kB_index=sys.argv.index('--kB')
+        kB=float(sys.argv[kB_index+1])
+    kN=400.0
+    if '--kN' in sys.argv:
+        kN_index=sys.argv.index('--kN')
+        kN=float(sys.argv[kN_index+1])
+    nbCutoff=0.50
+    if '--nbCutoff' in sys.argv:
+        nbCutoff_index=sys.argv.index('--nbCutoff')
+        nbCutoff=float(sys.argv[nbCutoff_index+1])
+    m=12
+    if '--m' in sys.argv:
+        m_index=sys.argv.index('--m')
+        m=float(sys.argv[m_index+1])
+    dt=0.001
+    if '--dt' in sys.argv:
+        dt_index=sys.argv.index('--dt')
+        dt=float(sys.argv[dt_index+1])
+    n=1000
+    if '--n' in sys.argv:
+        n_index=sys.argv.index('--n')
+        n=int(sys.argv[n_index+1])
+    out=iF.replace('.rvc','')
+    if '--out' in sys.argv:
+        out_index=sys.argv.index('--out')
+        out=sys.argv[out_index+1]    
+    return iF,kB,kN,nbCutoff,m,dt,n,out
+
+def dist(a,b):
+    return math.sqrt(math.pow(a[0]-b[0],2)+math.pow(a[1]-b[1],2)+math.pow(a[2]-b[2],2))
+
+#generates a dictionary of atoms from the input .rvc file 
+def parse_iF(iF):
+    iF=open(iF).read().split('\n')
+    while '' in iF:
+        iF.remove('')
+    atoms=dict()
+    r0=dict()
+    b0=dict()
+    header=None
+    for line in iF:
+        if line.startswith('#'):
+            header=line
+            continue
+        tokens=line.split(' ')
+        while '' in tokens:
+            tokens.remove('') 
+        atom_id=int(tokens[0])
+        x_coord=float(tokens[1])
+        y_coord=float(tokens[2])
+        z_coord=float(tokens[3])
+        x_vel=float(tokens[4])
+        y_vel=float(tokens[5])
+        z_vel=float(tokens[6])
+        bonds=[int(i) for i in tokens[7::]]
+        atoms[atom_id]=dict()
+        atoms[atom_id]['r']=[x_coord,y_coord,z_coord]
+        atoms[atom_id]['v']=[x_vel,y_vel,z_vel]
+        atoms[atom_id]['c']=bonds 
+        for b in bonds:
+            bond=tuple([atom_id,b])
+            revbond=bond[::-1]
+            if (revbond not in b0) and (bond not in b0): 
+                b0[bond]=None
+    #get the bond distances
+    for entry in b0:
+        a1=atoms[entry[0]]['r']
+        a2=atoms[entry[1]]['r']
+        b0[entry]=dist(a1,a2)
+        #rev_entry=entry[::-1] 
+        #b0[rev_entry]=b0[entry] #store both directions 
+    #get the non-bond distances less than the cutoff
+    all_atoms=atoms.keys()
+    for i in range(len(all_atoms)):
+        atom1=all_atoms[i] 
+        for j in range(i+1,len(all_atoms)):
+            atom2=all_atoms[j]
+            cur_entry=tuple([atom1,atom2])
+            if cur_entry in b0:
+                continue #these have a bond, ignore
+            cur_dist=dist(atoms[atom1]['r'],atoms[atom2]['r'])
+            if cur_dist <= nbCutoff:
+                r0[cur_entry]=cur_dist
+                #r0[cur_entry[::-1]]=cur_dist
+    return atoms,b0,r0,header 
+
+#calculate the potential energy 
+def update_force_and_potential_energy(atoms):
+    e_b=0
+    e_nb=0
+    forces=dict() 
+    for atom_id in atoms:
+        forces[atom_id]=[0,0,0] 
+    #bonded 
+    for entry in b0:
+        a1=entry[0]
+        a2=entry[1]
+        cur_dist=dist(atoms[a1]['r'],atoms[a2]['r'])
+        delta=math.pow((cur_dist-b0[entry]),2)*0.5*kB
+        e_b+=delta
+        #update the force on each atom!
+        #update force on a1 
+        f_mag=kB*(cur_dist-b0[entry])
+        f_x_a1=(f_mag*(atoms[a2]['r'][0]-atoms[a1]['r'][0]))/cur_dist
+        f_y_a1=(f_mag*(atoms[a2]['r'][1]-atoms[a1]['r'][1]))/cur_dist
+        f_z_a1=(f_mag*(atoms[a2]['r'][2]-atoms[a1]['r'][2]))/cur_dist
+        forces[a1][0]+=f_x_a1
+        forces[a1][1]+=f_y_a1
+        forces[a1][2]+=f_z_a1
+        #reverse the sign to update force on a1
+        forces[a2][0]+=(-1)*f_x_a1
+        forces[a2][1]+=(-1)*f_y_a1
+        forces[a2][2]+=(-1)*f_z_a1
+        
+    #non-bonded 
+    for entry in r0:
+        a1=entry[0]
+        a2=entry[1]
+        cur_dist=dist(atoms[a1]['r'],atoms[a2]['r'])
+        delta=math.pow((cur_dist-r0[entry]),2)*0.5*kN
+        e_nb+=delta
+        #update the force on each atom
+        f_mag=kN*(cur_dist-r0[entry])
+        f_x_a1=(f_mag*(atoms[a2]['r'][0]-atoms[a1]['r'][0]))/cur_dist
+        f_y_a1=(f_mag*(atoms[a2]['r'][1]-atoms[a1]['r'][1]))/cur_dist
+        f_z_a1=(f_mag*(atoms[a2]['r'][2]-atoms[a1]['r'][2]))/cur_dist
+        forces[a1][0]+=f_x_a1
+        forces[a1][1]+=f_y_a1
+        forces[a1][2]+=f_z_a1
+        #reverse the sign to update force on a1
+        forces[a2][0]+=(-1)*f_x_a1
+        forces[a2][1]+=(-1)*f_y_a1
+        forces[a2][2]+=(-1)*f_z_a1
+    return e_b,e_nb,forces 
+    
+#runs a single step of the simulation 
+def step_simulation(atoms,forces):
+    #update the velocities of each atom -- first iteration, forces set to 0 , so velocities will not change yet
+    for atom_id in atoms:
+        for direction in range(3):
+            a_t_dt_half=forces[atom_id][direction]*(1.0/m) 
+            v_t_dt_half=atoms[atom_id]['v'][direction]+0.5*a_t_dt_half*dt
+            r_t_dt=atoms[atom_id]['r'][direction]+v_t_dt_half*dt
+            #update atom dictionary with new velocity and position values 
+            atoms[atom_id]['v'][direction]=v_t_dt_half
+            atoms[atom_id]['r'][direction]=r_t_dt 
+    #update forces and potential energy for each interaction pair
+    e_b,e_nb,forces=update_force_and_potential_energy(atoms)
+    #update the velocity at the end of the timestep!
+    #and calculate kinetic energy 
+    e_k=0 
+    for atom_id in atoms:
+        for direction in range(3): 
+            a_t_dt=forces[atom_id][direction]*(1.0/m)
+            v_t_dt=atoms[atom_id]['v'][direction]+0.5*a_t_dt*dt
+            atoms[atom_id]['v'][direction]=v_t_dt
+            e_k+=v_t_dt*v_t_dt
+    e_k=0.5*m*e_k
+    e_tot=e_b+e_nb+e_k    
+    return atoms,e_b,e_nb,e_k,e_tot,forces 
+
+def main():
+
+    global kB
+    global kN
+    global nbCutoff
+    global m
+    global dt
+    global n
+    global out
+    global b0
+    global r0
+
+    iF,kB,kN,nbCutoff,m,dt,n,out=parse_inputs()    
+
+    
+    #dictionary containing initial information about all atoms in the simulation 
+    atoms,b0,r0,header_rvc=parse_iF(iF)
+
+    #open output files and write header 
+    out_rvc=open(out+"_out.rvc","w")
+    out_rvc.write(header_rvc+'\n')
+    #write the initial contents of the rvc file
+    atom_keys=atoms.keys()
+    atom_keys.sort()
+    for k in atom_keys:
+        out_rvc.write(str(k)+'\t'+'\t'.join([str(i) for i in atoms[k]['r']])+'\t'+'\t'.join([str(j) for j in atoms[k]['v']])+'\t'+'\t'.join([str(i) for i in atoms[k]['c']])+'\n')
+    
+    out_erg=open(out+"_out.erg","w")
+    out_erg.write('# step\tE_k\tE_b\tE_nB\tE_tot\n')
+
+    e_tot_iter0=None 
+    #initialize forces to 0 
+    forces=dict()
+    for atom_id in atoms:
+        forces[atom_id]=[0,0,0]#force components in x, y, z directions
+    for i in range(n):
+        if i%100==0:
+            print str(i) 
+        #run a step of the simulation!
+        atoms,e_b,e_nb,e_k,e_tot,forces=step_simulation(atoms,forces)
+        if i==0:
+            e_tot_iter0=e_tot
+        elif (e_tot > 10*e_tot_iter0): #Simulation has become unstable, terminate the code!
+            print "Simulation becomes unstable at time step:"+str(i+1)+"; terminating!"
+            exit() 
+        #write every 10th step to output file
+        if (i+1)%10==0:
+            #write to the output files!
+            #energy
+            out_erg.write(str(i+1)+'\t'+str(round(e_k,1))+'\t'+str(round(e_b,1))+'\t'+str(round(e_nb,1))+'\t'+str(round(e_tot,1))+'\n')
+            #position/velocity
+            out_rvc.write('#At time step '+str(i+1)+',energy = '+str(round(e_tot,3))+'kJ\n')
+            keys=atoms.keys()
+            keys.sort()
+            for k in keys:
+                out_rvc.write(str(k)+'\t'+'\t'.join([str(round(i,4)) for i in atoms[k]['r']])+'\t'+'\t'.join([str(round(j,4)) for j in atoms[k]['v']])+'\t'+'\t'.join([str(i) for i in atoms[k]['c']])+'\n')
+                
+if __name__=="__main__":
+    main() 
